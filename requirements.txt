@@ -1,0 +1,9 @@
+absl-py
+flax
+# jax[tpu] @ https://storage.googleapis.com/jax-releases/libtpu_releases.html
+jaxlib
+ml_collections
+numpy
+optax
+tensorflow-cpu
+tensorboard
