@@ -1,21 +1,17 @@
-# Copyright 2024 The Flax Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""
+Copyright 2024 Google LLC
 
-"""DLRM V2 Recommendation example.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-Library file which executes the training and evaluation loop for DLRM V2.
-The data is generated as fake input data.
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 from absl import logging
@@ -32,6 +28,7 @@ from metrics import accuracy
 import ml_collections
 from data_pipeline import train_input_fn, eval_input_fn
 import tensorflow as tf
+import metrics
 
 @jax.jit
 def apply_model(state, dense_features, sparse_features, labels):
@@ -43,8 +40,7 @@ def apply_model(state, dense_features, sparse_features, labels):
 
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
     (loss, logits), grads = grad_fn(state.params)
-    acc = accuracy(logits, labels)
-    return grads, loss, acc
+    return grads, loss, logits
 
 @jax.jit
 def update_model(state, grads):
@@ -80,19 +76,21 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str) -> train
         rng, input_rng = jax.random.split(rng)
         
         # Train loop
-        epoch_loss = []
-        epoch_accuracy = []
-        for features, labels in train_ds.take(config.steps_per_epoch):  # Add this line\
+        epoch_metrics = []
+        for features, labels in train_ds.take(config.steps_per_epoch):
             dense_features = jnp.array(features['dense_features'])
             sparse_features = {k: jnp.array(v) for k, v in features['sparse_features'].items()}
             labels = jnp.array(labels)
-            grads, loss, accuracy = apply_model(state, dense_features, sparse_features, labels)
+            grads, loss, logits = apply_model(state, dense_features, sparse_features, labels)
             state = update_model(state, grads)
-            epoch_loss.append(loss)
-            epoch_accuracy.append(accuracy)
+            batch_metrics = metrics.compute_metrics(logits, labels)
+            batch_metrics['loss'] = loss
+            epoch_metrics.append(batch_metrics)
         
-        train_loss = jnp.mean(jnp.array(epoch_loss))
-        train_accuracy = jnp.mean(jnp.array(epoch_accuracy))
+        # Compute average metrics for the epoch
+        train_metrics = jax.tree_map(lambda *args: jnp.mean(jnp.array(args)), *epoch_metrics)
+        
+        print('epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f' % (epoch, train_metrics['loss'], train_metrics['accuracy'] * 100))
 
         # # Evaluation loop
         # test_loss = []
@@ -107,17 +105,7 @@ def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str) -> train
         
         # test_loss = jnp.mean(jnp.array(test_loss))
         # test_accuracy = jnp.mean(jnp.array(test_accuracy))
-
-        # logging.info(
-        #     'epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f, test_loss: %.4f, test_accuracy: %.2f'
-        #     % (epoch, train_loss, train_accuracy * 100, test_loss, test_accuracy * 100)
-        # )
-        
-        # print('epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f, test_loss: %.4f, test_accuracy: %.2f'
-        #     % (epoch, train_loss, train_accuracy * 100, test_loss, test_accuracy * 100))    
-        print('epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f'
-            % (epoch, train_loss, train_accuracy * 100))    
-
+         
     return state
 
 if __name__ == "__main__":

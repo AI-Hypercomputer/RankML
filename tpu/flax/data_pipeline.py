@@ -1,6 +1,17 @@
-"""Data pipeline for the Ranking model.
+"""
+Copyright 2024 Google LLC
 
-This module defines various input datasets for the Ranking model.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 from typing import List
@@ -52,7 +63,7 @@ class CriteoTsvReader:
     def _generate_synthetic_data(self) -> tf.data.Dataset:
         """Creates synthetic data based on the parameter batch size."""
         num_dense = self._model_config.num_dense_features
-        dataset_size = 10 * self._params.global_batch_size
+        dataset_size = 100 * self._params.global_batch_size
 
         dense_tensor = tf.random.uniform(shape=(dataset_size, num_dense), maxval=1.0, dtype=tf.float32)
         sparse_tensors = [

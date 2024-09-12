@@ -1,5 +1,5 @@
 # RankML
-RankML Library for TPU in Keras and Flax
+RankML Library in Jax
 
 ## Setup
 
