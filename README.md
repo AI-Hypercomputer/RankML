@@ -1,5 +1,5 @@
 # RankML
-RankML Library for TPU in Keras and Flax
+RankML Library in Jax and Keras
 
 ## Setup
 
@@ -7,6 +7,7 @@ To set up the environment for this project, follow these steps:
 
 ## Install dependencies:
 ```bash
+pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 pip install -r requirements.txt
 ```
 

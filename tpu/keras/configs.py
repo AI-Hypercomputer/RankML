@@ -22,12 +22,12 @@ def get_config():
 
     # Model configuration
     config.model = ml_collections.ConfigDict()
-    config.model.vocab_sizes = [1000, 1000, 1000]  # Example vocab sizes
-    config.model.num_dense_features = 13  # Example number of dense features
-    config.model.embedding_dim = 32  # Add this line
-    config.model.bottom_mlp_dims = [64, 32, 16]  # Add this line
-    config.model.top_mlp_dims = [64, 32, 1]  # Add this line
-    config.model.learning_rate = 0.001  # Add this line
+    config.model.vocab_sizes = [1000, 1000, 1000] 
+    config.model.num_dense_features = 13  
+    config.model.embedding_dim = 32  
+    config.model.bottom_mlp_dims = [64, 32, 16]  
+    config.model.top_mlp_dims = [64, 32, 1]  
+    config.model.learning_rate = 0.001  
 
     # Data configuration
     config.train_data = ml_collections.ConfigDict()
@@ -47,7 +47,7 @@ def get_config():
     config.validation_data.use_synthetic_data = True
 
     # Global configuration
-    config.num_epochs = 10  # Make sure this is defined
-    config.steps_per_epoch = 100  # Adjust this value based on your dataset size and batch size
+    config.num_epochs = 10  
+    config.steps_per_epoch = 100 
 
     return config
