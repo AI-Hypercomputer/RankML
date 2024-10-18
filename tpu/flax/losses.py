@@ -1,5 +1,4 @@
-"""
-Copyright 2024 Google LLC
+"""Copyright 2024 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +24,10 @@ import ml_collections
 import numpy as np
 import optax
 
+
 def bce_with_logits_loss(logits, labels):
-    """Binary Cross Entropy with Logits Loss."""
-    return -jnp.mean(labels * jax.nn.log_sigmoid(logits) + (1 - labels) * jax.nn.log_sigmoid(-logits))
+  """Binary Cross Entropy with Logits Loss."""
+  return -jnp.mean(
+      labels * jax.nn.log_sigmoid(logits)
+      + (1 - labels) * jax.nn.log_sigmoid(-logits)
+  )

@@ -1,5 +1,4 @@
-"""
-Copyright 2024 Google LLC
+"""Copyright 2024 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-from typing import Sequence, List
+from typing import List, Sequence
 from absl import logging
 from flax import linen as nn
 from flax.metrics import tensorboard
@@ -24,46 +23,52 @@ import jax.numpy as jnp
 import ml_collections
 import numpy as np
 import optax
-from layers import MLP, DenseArch, EmbeddingArch, InteractionArch, OverArch
+from layers import DenseArch, EmbeddingArch, InteractionArch, MLP, OverArch
+
 
 class DLRMV2(nn.Module):
-    """DLRM V2 model."""
-    vocab_sizes: List[int]
-    embedding_dim: int
-    bottom_mlp_dims: List[int]
-    top_mlp_dims: List[int]
+  """DLRM V2 model."""
 
-    @nn.compact
-    def __call__(self, dense_features, embedding_ids):
-        # Bottom MLP
-        x = self.bottom_mlp(dense_features)
+  vocab_sizes: List[int]
+  embedding_dim: int
+  bottom_mlp_dims: List[int]
+  top_mlp_dims: List[int]
 
-        # Embedding layer
-        embeddings = []
-        for i, vocab_size in enumerate(self.vocab_sizes):
-            embedding = nn.Embed(vocab_size, self.embedding_dim)(embedding_ids[str(i)])
-            embeddings.append(embedding)
-        
-        # Flatten and concatenate embeddings
-        embedding_output = jnp.concatenate([e.reshape(-1, self.embedding_dim) for e in embeddings], axis=1)
+  @nn.compact
+  def __call__(self, dense_features, embedding_ids):
+    # Bottom MLP
+    x = self.bottom_mlp(dense_features)
 
-        # Concatenate bottom MLP output and embedding output
-        concatenated = jnp.concatenate([x, embedding_output], axis=1)
+    # Embedding layer
+    embeddings = []
+    for i, vocab_size in enumerate(self.vocab_sizes):
+      embedding = nn.Embed(vocab_size, self.embedding_dim)(
+          embedding_ids[str(i)]
+      )
+      embeddings.append(embedding)
 
-        # Top MLP
-        y = self.top_mlp(concatenated)
+    # Flatten and concatenate embeddings
+    embedding_output = jnp.concatenate(
+        [e.reshape(-1, self.embedding_dim) for e in embeddings], axis=1
+    )
 
-        return y.squeeze(-1)
+    # Concatenate bottom MLP output and embedding output
+    concatenated = jnp.concatenate([x, embedding_output], axis=1)
 
-    def bottom_mlp(self, x):
-        for dim in self.bottom_mlp_dims:
-            x = nn.Dense(dim)(x)
-            x = nn.relu(x)
-        return x
+    # Top MLP
+    y = self.top_mlp(concatenated)
 
-    def top_mlp(self, x):
-        for dim in self.top_mlp_dims[:-1]:
-            x = nn.Dense(dim)(x)
-            x = nn.relu(x)
-        x = nn.Dense(self.top_mlp_dims[-1])(x)
-        return x
+    return y.squeeze(-1)
+
+  def bottom_mlp(self, x):
+    for dim in self.bottom_mlp_dims:
+      x = nn.Dense(dim)(x)
+      x = nn.relu(x)
+    return x
+
+  def top_mlp(self, x):
+    for dim in self.top_mlp_dims[:-1]:
+      x = nn.Dense(dim)(x)
+      x = nn.relu(x)
+    x = nn.Dense(self.top_mlp_dims[-1])(x)
+    return x

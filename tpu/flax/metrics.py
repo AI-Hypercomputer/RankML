@@ -1,5 +1,4 @@
-"""
-Copyright 2024 Google LLC
+"""Copyright 2024 Google LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,15 +24,16 @@ import ml_collections
 import numpy as np
 import optax
 
+
 def accuracy(logits, labels):
-    """Calculates the accuracy of predictions."""
-    predictions = jax.nn.sigmoid(logits) > 0.5
-    return jnp.mean(predictions == labels)
+  """Calculates the accuracy of predictions."""
+  predictions = jax.nn.sigmoid(logits) > 0.5
+  return jnp.mean(predictions == labels)
+
 
 @jax.jit
 def compute_metrics(logits, labels):
-    """Computes all metrics at once."""
-    return {
-        'accuracy': accuracy(logits, labels),
-    }
-
+  """Computes all metrics at once."""
+  return {
+      'accuracy': accuracy(logits, labels),
+  }
