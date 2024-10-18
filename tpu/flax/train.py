@@ -22,92 +22,129 @@ import jax
 import jax.numpy as jnp
 import optax
 from models import DLRMV2
-from configs import get_config
+from configs import get_config, get_criteo_config
 from losses import bce_with_logits_loss
-from metrics import accuracy
+from metrics import accuracy, compute_metrics
 import ml_collections
 from data_pipeline import train_input_fn, eval_input_fn
 import tensorflow as tf
-import metrics
+from jax.experimental import mesh_utils
+from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+import numpy as np
+import time
 
-@jax.jit
-def apply_model(state, dense_features, sparse_features, labels):
-    """Computes gradients, loss and accuracy for a single batch."""
-    def loss_fn(params):
-        logits = state.apply_fn({'params': params}, dense_features, sparse_features)
-        loss = bce_with_logits_loss(logits, labels)
-        return loss, logits
 
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (loss, logits), grads = grad_fn(state.params)
-    return grads, loss, logits
-
-@jax.jit
-def update_model(state, grads):
-    return state.apply_gradients(grads=grads)
-
-def create_train_state(rng, config):
-    """Creates initial `TrainState`."""
+def create_train_state(rng, config, mesh):
+    """Creates initial `TrainState` with sharding."""
     dlrm = DLRMV2(
         vocab_sizes=config.model.vocab_sizes,
         embedding_dim=config.model.embedding_dim,
         bottom_mlp_dims=config.model.bottom_mlp_dims,
-        top_mlp_dims=config.model.top_mlp_dims
+        top_mlp_dims=config.model.top_mlp_dims,
     )
-    
-    # Create dummy inputs for initialization
-    dummy_dense = jnp.ones([1, config.model.num_dense_features])
-    dummy_sparse = {str(i): jnp.ones([1], dtype=jnp.int32) for i in range(len(config.model.vocab_sizes))}
-    
-    params = dlrm.init(rng, dummy_dense, dummy_sparse)['params']
-    tx = optax.adam(config.model.learning_rate)
-    return train_state.TrainState.create(apply_fn=dlrm.apply, params=params, tx=tx)
 
-def train_and_evaluate(config: ml_collections.ConfigDict, workdir: str) -> train_state.TrainState:
-    """Execute model training and evaluation loop."""
-    train_ds = train_input_fn(config)
-    # test_ds = eval_input_fn(config)
+    dummy_dense = jnp.ones([1, config.model.num_dense_features])
+    dummy_sparse = {
+        str(i): jnp.ones([1], dtype=jnp.int32)
+        for i in range(len(config.model.vocab_sizes))
+    }
+
+    params = dlrm.init(rng, dummy_dense, dummy_sparse)["params"]
+    tx = optax.adam(config.model.learning_rate)
+
+    return train_state.TrainState.create(
+        apply_fn=dlrm.apply,
+        params=jax.tree.map(
+            lambda x: jax.device_put(x, NamedSharding(mesh, P())), params
+        ),
+        tx=tx,
+    )
+
+
+@jax.jit
+def train_step(state, batch):
+    def loss_fn(params):
+        logits = state.apply_fn(
+            {"params": params}, batch["dense_features"], batch["sparse_features"]
+        )
+        loss = bce_with_logits_loss(logits, batch["labels"])
+        return loss, logits
+
+    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+    (loss, logits), grads = grad_fn(state.params)
+    state = state.apply_gradients(grads=grads)
+    metrics = compute_metrics(logits, batch["labels"])
+    metrics["loss"] = loss
+    return state, metrics
+
+
+@jax.jit
+def eval_step(state, batch):
+    logits = state.apply_fn(
+        {"params": state.params}, batch["dense_features"], batch["sparse_features"]
+    )
+    loss = bce_with_logits_loss(logits, batch["labels"])
+    metrics = compute_metrics(logits, batch["labels"])
+    metrics["loss"] = loss
+    return metrics
+
+
+def train_and_evaluate(
+    config: ml_collections.ConfigDict, workdir: str
+) -> train_state.TrainState:
+    devices = jax.devices()
+    num_devices = len(devices)
+    mesh = Mesh(mesh_utils.create_device_mesh((num_devices,)), axis_names=("batch",))
 
     rng = jax.random.PRNGKey(0)
     rng, init_rng = jax.random.split(rng)
-    state = create_train_state(init_rng, config)
-    print('start training')
-    for epoch in range(1, config.num_epochs + 1):
-        rng, input_rng = jax.random.split(rng)
-        
-        # Train loop
-        epoch_metrics = []
-        for features, labels in train_ds.take(config.steps_per_epoch):
-            dense_features = jnp.array(features['dense_features'])
-            sparse_features = {k: jnp.array(v) for k, v in features['sparse_features'].items()}
-            labels = jnp.array(labels)
-            grads, loss, logits = apply_model(state, dense_features, sparse_features, labels)
-            state = update_model(state, grads)
-            batch_metrics = metrics.compute_metrics(logits, labels)
-            batch_metrics['loss'] = loss
-            epoch_metrics.append(batch_metrics)
-        
-        # Compute average metrics for the epoch
-        train_metrics = jax.tree_map(lambda *args: jnp.mean(jnp.array(args)), *epoch_metrics)
-        
-        print('epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f' % (epoch, train_metrics['loss'], train_metrics['accuracy'] * 100))
 
-        # # Evaluation loop
-        # test_loss = []
-        # test_accuracy = []
-        # for features, labels in test_ds:
-        #     dense_features = jnp.array(features['dense_features'])
-        #     sparse_features = {k: jnp.array(v) for k, v in features['sparse_features'].items()}
-        #     labels = jnp.array(labels)
-        #     _, loss, accuracy = apply_model(state, dense_features, sparse_features, labels)
-        #     test_loss.append(loss)
-        #     test_accuracy.append(accuracy)
-        
-        # test_loss = jnp.mean(jnp.array(test_loss))
-        # test_accuracy = jnp.mean(jnp.array(test_accuracy))
-         
+    with mesh:
+        state = create_train_state(init_rng, config, mesh)
+
+        train_ds = train_input_fn(config)
+        eval_ds = eval_input_fn(config)
+
+        batch_sharding = NamedSharding(
+            mesh,
+            P(
+                "batch",
+            ),
+        )
+
+        print("Start training")
+        for epoch in range(1, config.num_epochs + 1):
+            train_metrics = []
+            for features, labels in train_ds.take(config.steps_per_epoch):
+                batch = {
+                    "dense_features": jax.device_put(
+                        np.array(features["dense_features"]), batch_sharding
+                    ),
+                    "sparse_features": jax.tree.map(
+                        lambda x: jax.device_put(np.array(x), batch_sharding),
+                        features["sparse_features"],
+                    ),
+                    "labels": jax.device_put(np.array(labels), batch_sharding),
+                }
+
+                # jax.debug.visualize_array_sharding(batch['labels'])
+
+                state, metrics = train_step(state, batch)
+                train_metrics.append(metrics)
+
+            train_metrics = jax.tree.map(
+                lambda *args: jnp.mean(jnp.array(args)), *train_metrics
+            )
+
+            print(f"Epoch {epoch}:")
+            print(
+                f'  Train loss: {train_metrics["loss"]:.4f}, accuracy: {train_metrics["accuracy"]:.4f}, auc: {train_metrics["auc"]: .4f}'
+            )
+
     return state
 
+
 if __name__ == "__main__":
-    config = get_config()
-    train_and_evaluate(config, '/tmp/dlrm_v2')
+    # config = get_config()
+    config = get_criteo_config()
+    train_and_evaluate(config, "/tmp/dlrm_v2")

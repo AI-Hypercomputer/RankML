@@ -25,6 +25,9 @@ import ml_collections
 import numpy as np
 import optax
 
+
 def bce_with_logits_loss(logits, labels):
     """Binary Cross Entropy with Logits Loss."""
-    return -jnp.mean(labels * jax.nn.log_sigmoid(logits) + (1 - labels) * jax.nn.log_sigmoid(-logits))
+    return -jnp.mean(
+        labels * jax.nn.log_sigmoid(logits) + (1 - labels) * jax.nn.log_sigmoid(-logits)
+    )
