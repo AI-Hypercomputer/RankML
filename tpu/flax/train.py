@@ -31,8 +31,6 @@ from metrics import accuracy
 from models import DLRMV2
 import tensorflow as tf
 
-# test
-
 @jax.jit
 def apply_model(state, dense_features, sparse_features, labels):
   """Computes gradients, loss and accuracy for a single batch."""
