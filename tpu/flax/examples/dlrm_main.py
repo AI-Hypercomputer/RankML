@@ -144,12 +144,7 @@ _EMBEDDING_THRESHOLD = flags.DEFINE_integer(
     "Embedding threshold for placing features on TensorCore or SparseCore.",
 )
 
-_EXPERIMENT_NAME = flags.DEFINE_string(
-    "experiment_name",
-    "jax_dlrm",
-    "The name of the experiment. If not set the name of the fixture that"
-    " returns the fiddle configuration will be used instead.",
-)
+
 _MODEL_DIR = flags.DEFINE_string(
     "model_dir",
     "/tmp/dlrm_test",
@@ -166,49 +161,6 @@ _MODE = flags.DEFINE_enum(
         "continuous_eval",
     ],
     help="Mode to run: `train`, `eval`, `train_and_eval`, `continuous_eval`.",
-)
-
-_BINARY_PATH = flags.DEFINE_string("binary_path", None, "Path to train binary.")
-
-_PRIORITY = flags.DEFINE_integer(
-    "priority", 200, "Priority for the training job."
-)
-_BORG_USER = flags.DEFINE_string("borg_user", None, "Borg user.")
-_CELL = flags.DEFINE_string("cell", "yo", "Borg cell.")
-_LOGS_ACCESS = flags.DEFINE_multi_string(
-    "logs_access",
-    [],
-    "List of roles that can read the logs of the training job.",
-)
-
-_TRAIN_PKG_NAME = flags.DEFINE_string(
-    "train_pkg_name",
-    None,
-    "MPM package name of the train binary. Must be passed with"
-    " `train_pkg_binary` and `train_version`.",
-)
-_TRAIN_PKG_BINARY = flags.DEFINE_string(
-    "train_pkg_binary",
-    None,
-    "Binary path of the train binary within the MPM. Must be passed with"
-    " `train_pkg_name` and `train_version`.",
-)
-_TRAINER_VERSION = flags.DEFINE_string(
-    "train_version",
-    None,
-    "Version of the train binary MPM. Must be passed with `train_pkg_name` and"
-    " `train_pkg_binary`.",
-)
-
-_VIZIER_STUDY_CONFIG = flags.DEFINE_string(
-    "vizier_study_config",
-    None,
-    "Path to a `vizier_pb2.StudyConfig` text proto. Must be set to use Vizier.",
-)
-_VIZIER_NUM_PARALLEL_RUNS = flags.DEFINE_integer(
-    "vizier_num_parallel_runs",
-    2,
-    "Number of parallel trials to run with Vizier.",
 )
 
 
